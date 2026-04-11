@@ -16,6 +16,7 @@ export default function App() {
   const [user, setUser] = useState(null)
   const [guestScreenings, setGuestScreenings] = useState(0)
   const [authLoading, setAuthLoading] = useState(true)
+  const [showAuth, setShowAuth] = useState(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -41,10 +42,6 @@ export default function App() {
     setLoading(true)
     setResults([])
 
-    if (!user) {
-  setGuestScreenings(prev => prev + 1)
-}
-
     const formData = new FormData()
     for (let f of files) formData.append("files", f)
     formData.append("job_description", jd)
@@ -56,6 +53,7 @@ export default function App() {
       })
       const data = await res.json()
       setResults(data)
+      if (!user) setGuestScreenings(prev => prev + 1)
     } catch (err) {
       setError("Something went wrong. Is the backend running?")
     } finally {
@@ -125,9 +123,7 @@ export default function App() {
     </div>
   )
 
-  if (!user && showTool && guestScreenings >= 3) {
-  return <Auth onLogin={setUser} />
-}
+  if (showAuth) return <Auth onLogin={(u) => { setUser(u); setShowAuth(false); }} />
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800">
@@ -142,43 +138,50 @@ export default function App() {
           <span className="ml-2 text-xs bg-blue-500 text-white px-2 py-0.5 rounded-full">Beta</span>
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-slate-400 text-sm">{user.email}</span>
-          <button
-            onClick={() => setShowFeedback(true)}
-            className="border border-slate-600 hover:border-slate-400 text-slate-300 px-4 py-2 rounded-xl text-sm font-medium transition-colors"
-          >
-            Give Feedback
-          </button>
-          <button
-            onClick={() => setShowTool(true)}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors"
-          >
-            {!user && (
-  <div className="bg-blue-900 border border-blue-700 rounded-xl p-4 mb-4 flex justify-between items-center">
-    <div>
-      <p className="text-blue-300 text-sm font-medium">
-        Guest mode — {3 - guestScreenings} free screenings remaining
-      </p>
-      <p className="text-blue-400 text-xs mt-1">
-        Sign up free to unlock 20 resumes + save history
-      </p>
-    </div>
-    <button
-      onClick={() => setShowTool(false)}
-      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm"
-    >
-      Sign up free
-    </button>
-  </div>
-)}
-            Screen Resumes
-          </button>
-          <button
-            onClick={handleLogout}
-            className="border border-red-600 hover:bg-red-600 text-red-400 hover:text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors"
-          >
-            Logout
-          </button>
+          {user ? (
+            <>
+              <span className="text-slate-400 text-sm">{user.email}</span>
+              <button
+                onClick={() => setShowFeedback(true)}
+                className="border border-slate-600 hover:border-slate-400 text-slate-300 px-4 py-2 rounded-xl text-sm font-medium transition-colors"
+              >
+                Give Feedback
+              </button>
+              <button
+                onClick={() => setShowTool(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors"
+              >
+                Screen Resumes
+              </button>
+              <button
+                onClick={handleLogout}
+                className="border border-red-600 hover:bg-red-600 text-red-400 hover:text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors"
+              >
+                Logout
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() => setShowFeedback(true)}
+                className="border border-slate-600 hover:border-slate-400 text-slate-300 px-4 py-2 rounded-xl text-sm font-medium transition-colors"
+              >
+                Give Feedback
+              </button>
+              <button
+                onClick={() => setShowAuth(true)}
+                className="border border-slate-600 text-slate-300 px-4 py-2 rounded-xl text-sm transition-colors"
+              >
+                Sign in
+              </button>
+              <button
+                onClick={() => setShowTool(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors"
+              >
+                Try it free
+              </button>
+            </>
+          )}
         </div>
       </nav>
 
@@ -190,7 +193,7 @@ export default function App() {
                AI Powered — Free to use
             </div>
             <h1 className="text-5xl font-bold text-white mb-6 leading-tight">
-              Screen 15+ Resumes<br/>
+              Screen 20+ Resumes<br/>
               <span className="text-blue-400">in Seconds</span>
             </h1>
             <p className="text-slate-400 text-xl mb-10 max-w-2xl mx-auto">
@@ -313,6 +316,26 @@ export default function App() {
           <h2 className="text-3xl font-bold text-white mb-2">Screen Resumes</h2>
           <p className="text-slate-400 mb-8">Upload PDFs and paste a job description to get started</p>
 
+          {/* Guest Banner */}
+          {!user && (
+            <div className="bg-blue-900 border border-blue-700 rounded-xl p-4 mb-6 flex justify-between items-center">
+              <div>
+                <p className="text-blue-300 text-sm font-medium">
+                  Guest mode — {Math.max(0, 3 - guestScreenings)} free screenings remaining
+                </p>
+                <p className="text-blue-400 text-xs mt-1">
+                  Sign up free to unlock 20 resumes + save history
+                </p>
+              </div>
+              <button
+                onClick={() => setShowAuth(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm"
+              >
+                Sign up free
+              </button>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-6 mb-6">
             <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6">
               <label className="block text-sm font-medium text-slate-300 mb-3">
@@ -342,7 +365,9 @@ export default function App() {
                 <label htmlFor="fileInput" className="cursor-pointer">
                   <div className="text-4xl mb-2">📄</div>
                   <p className="text-slate-400 text-sm">Click to upload PDF resumes</p>
-                  <p className="text-slate-500 text-xs mt-1">Max 20 resumes per screening</p>
+                  <p className="text-slate-500 text-xs mt-1">
+                    {user ? "Max 20 resumes per screening" : "Max 3 resumes as guest"}
+                  </p>
                 </label>
               </div>
               {files.length > 0 && (
@@ -358,21 +383,34 @@ export default function App() {
 
           {error && <p className="text-red-400 text-sm mb-4 text-center">{error}</p>}
 
-          <button
-            onClick={screenResumes}
-            disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white py-4 rounded-2xl font-semibold text-lg transition-colors"
-          >
-            {loading ? (
-              <span className="flex items-center justify-center gap-3">
-                <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
-                </svg>
-                Screening resumes... please wait
-              </span>
-            ) : "Screen Resumes"}
-          </button>
+          {!user && guestScreenings >= 3 ? (
+            <div className="text-center py-8 bg-slate-800 border border-slate-700 rounded-2xl">
+              <p className="text-white font-bold text-xl mb-2">You've used all 3 free screenings!</p>
+              <p className="text-slate-400 text-sm mb-6">Sign up free to unlock 20 resumes + save history</p>
+              <button
+                onClick={() => setShowAuth(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-xl font-medium"
+              >
+                Sign up free — it's quick!
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={screenResumes}
+              disabled={loading}
+              className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white py-4 rounded-2xl font-semibold text-lg transition-colors"
+            >
+              {loading ? (
+                <span className="flex items-center justify-center gap-3">
+                  <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                  </svg>
+                  Screening resumes... please wait
+                </span>
+              ) : "Screen Resumes"}
+            </button>
+          )}
 
           {results.length > 0 && (
             <div className="mt-10">
