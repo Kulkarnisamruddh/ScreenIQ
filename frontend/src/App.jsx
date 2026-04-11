@@ -14,6 +14,7 @@ export default function App() {
   const [feedback, setFeedback] = useState({rating: "", message: "", college: ""})
   const [feedbackSent, setFeedbackSent] = useState(false)
   const [user, setUser] = useState(null)
+  const [guestScreenings, setGuestScreenings] = useState(0)
   const [authLoading, setAuthLoading] = useState(true)
 
   useEffect(() => {
@@ -39,6 +40,10 @@ export default function App() {
     setError("")
     setLoading(true)
     setResults([])
+
+    if (!user) {
+  setGuestScreenings(prev => prev + 1)
+}
 
     const formData = new FormData()
     for (let f of files) formData.append("files", f)
@@ -120,7 +125,9 @@ export default function App() {
     </div>
   )
 
-  if (!user) return <Auth onLogin={setUser} />
+  if (!user && showTool && guestScreenings >= 3) {
+  return <Auth onLogin={setUser} />
+}
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800">
@@ -146,6 +153,24 @@ export default function App() {
             onClick={() => setShowTool(true)}
             className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors"
           >
+            {!user && (
+  <div className="bg-blue-900 border border-blue-700 rounded-xl p-4 mb-4 flex justify-between items-center">
+    <div>
+      <p className="text-blue-300 text-sm font-medium">
+        Guest mode — {3 - guestScreenings} free screenings remaining
+      </p>
+      <p className="text-blue-400 text-xs mt-1">
+        Sign up free to unlock 20 resumes + save history
+      </p>
+    </div>
+    <button
+      onClick={() => setShowTool(false)}
+      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm"
+    >
+      Sign up free
+    </button>
+  </div>
+)}
             Screen Resumes
           </button>
           <button
