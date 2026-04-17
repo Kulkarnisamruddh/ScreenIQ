@@ -46,10 +46,11 @@ export default function App() {
   for (let f of files) formData.append("files", f)
   
   try {
-    let url = import.meta.env.VITE_API_BASE_URL + "/api/auto-sort"
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || "https://campusscreen-production.up.railway.app"
+    let url = baseUrl + "/api/auto-sort"
     if (jd) {
       formData.append("job_description", jd)
-      url = import.meta.env.VITE_API_BASE_URL + "/api/rank"
+      url = baseUrl + "/api/rank"
     }
 
     const res = await fetch(url, {
