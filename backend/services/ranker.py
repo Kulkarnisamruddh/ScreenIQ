@@ -1,14 +1,14 @@
-from groq import Groq
+from groq import AsyncGroq
 import os
 import json
-import time
+import asyncio
 from dotenv import load_dotenv
 
 load_dotenv()
 
-client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
+client = AsyncGroq(api_key=os.environ.get("GROQ_API_KEY"))
 
-def rank_resumes(job_description: str, resumes: list) -> list:
+async def rank_resumes(job_description: str, resumes: list) -> list:
     resume_text = ""
     for i, resume in enumerate(resumes):
         resume_text += f"\n\nResume {i+1} - {resume['filename']}:\n{resume['text']}"
@@ -58,9 +58,9 @@ Respond in this exact JSON format:
 
 Return only JSON, nothing else."""
 
-    time.sleep(3)
+    await asyncio.sleep(3)
 
-    chat_completion = client.chat.completions.create(
+    chat_completion = await client.chat.completions.create(
         messages=[{"role": "user", "content": prompt}],
         model="llama-3.3-70b-versatile",
     )
@@ -71,7 +71,7 @@ Return only JSON, nothing else."""
     return result
 
 
-def auto_sort_resumes(resumes: list) -> list:
+async def auto_sort_resumes(resumes: list) -> list:
     resume_text = ""
     for i, resume in enumerate(resumes):
         resume_text += f"\n\nResume {i+1} - {resume['filename']}:\n{resume['text']}"
@@ -116,9 +116,9 @@ Respond in this exact JSON format:
 
 Return only JSON, nothing else."""
 
-    time.sleep(3)
+    await asyncio.sleep(3)
 
-    chat_completion = client.chat.completions.create(
+    chat_completion = await client.chat.completions.create(
         messages=[{"role": "user", "content": prompt}],
         model="llama-3.3-70b-versatile",
     )

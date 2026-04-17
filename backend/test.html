@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<body>
+  <h2>Bulk Resume Screener</h2>
+  <h3>Job Description</h3>
+  <textarea id="jd" rows="5" cols="60" placeholder="Paste job description here..."></textarea>
+  <br><br>
+  <h3>Upload Resumes</h3>
+  <input type="file" id="files" multiple accept=".pdf">
+  <br><br>
+  <button onclick="rank()">Screen Resumes</button>
+  <br><br>
+  <div id="result"></div>
+
+  <script>
+    async function rank() {
+      const files = document.getElementById('files').files;
+      const jd = document.getElementById('jd').value;
+      if (!jd || files.length === 0) { alert('Please fill both fields'); return; }
+
+      document.getElementById('result').innerHTML = 'Screening... please wait';
+
+      const formData = new FormData();
+      for (let f of files) formData.append('files', f);
+      formData.append('job_description', jd);
+
+      const res = await fetch('http://127.0.0.1:8000/api/rank', {
+        method: 'POST',
+        body: formData
+      });
+
+      const data = await res.json();
+      let html = '';
+      data.forEach(c => {
+        html += `
+          <hr>
+          <h3>Rank #${c.rank} — ${c.filename}</h3>
+          <p><b>Score:</b> ${c.score}/100</p>
+          <p><b>Summary:</b> ${c.summary}</p>
+          <p><b>Detected Role:</b> ${c.detected_role || 'N/A'}</p>
+          <p><b>Experience:</b> ${c.experience_level || 'N/A'}</p>
+          <p><b>CGPA:</b> ${c.cgpa || 'N/A'}</p>
+          <p><b>Batch Year:</b> ${c.batch_year || 'N/A'}</p>
+          <p><b>Branch:</b> ${c.branch || 'N/A'}</p>
+          <p><b>Location:</b> ${c.location || 'N/A'}</p>
+          <p><b>Skills:</b> ${c.skills_detected ? c.skills_detected.join(', ') : 'N/A'}</p>
+          <p><b>Strengths:</b> ${c.strengths.join(', ')}</p>
+          <p><b>Weaknesses:</b> ${c.weaknesses.join(', ')}</p>
+          <p><b>Red Flags:</b> ${c.red_flags.length ? c.red_flags.join(', ') : 'None'}</p>
+        `;
+      });
+      document.getElementById('result').innerHTML = html;
+    }
+  </script>
+</body>
+</html>

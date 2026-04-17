@@ -49,7 +49,7 @@ async def rank_uploaded_resumes(
     if not resumes:
         raise HTTPException(status_code=400, detail="No valid PDF files uploaded")
 
-    ranked = rank_resumes(job_description, resumes)
+    ranked = await rank_resumes(job_description, resumes)
     return ranked
 
 @router.post("/auto-sort")
@@ -75,5 +75,5 @@ async def auto_sort_uploaded_resumes(
     if not resumes:
         raise HTTPException(status_code=400, detail="No valid PDF files uploaded")
 
-    sorted_results = auto_sort_resumes(resumes)
+    sorted_results = await auto_sort_resumes(resumes)
     return sorted_results

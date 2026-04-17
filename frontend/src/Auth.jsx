@@ -65,7 +65,7 @@ export default function Auth({ onLogin }) {
           <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center">
             <span style={{color:"white", fontWeight:"bold", fontSize:"14px"}}>CS</span>
           </div>
-          <span className="text-white font-bold text-lg">CampusScreen</span>
+          <span className="text-white font-bold text-lg">ScreenIQ</span>
         </div>
 
         <h2 className="text-2xl font-bold text-white mb-2">

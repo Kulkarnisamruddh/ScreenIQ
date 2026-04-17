@@ -14,6 +14,7 @@ export default function App() {
   const [feedback, setFeedback] = useState({rating: "", message: "", college: ""})
   const [feedbackSent, setFeedbackSent] = useState(false)
   const [user, setUser] = useState(null)
+  const [roleFilter, setRoleFilter] = useState("All")
   const [guestScreenings, setGuestScreenings] = useState(0)
   const [authLoading, setAuthLoading] = useState(true)
   const [showAuth, setShowAuth] = useState(false)
@@ -36,7 +37,6 @@ export default function App() {
   }
 
   async function screenResumes() {
-  if (!jd) { setError("Please enter a job description"); return; }
   if (files.length === 0) { setError("Please upload at least one PDF"); return; }
   setError("")
   setLoading(true)
@@ -44,15 +44,22 @@ export default function App() {
 
   const formData = new FormData()
   for (let f of files) formData.append("files", f)
-  formData.append("job_description", jd)
-
+  
   try {
-    const res = await fetch("https://campusscreen-production.up.railway.app/api/rank", {
+    let url = import.meta.env.VITE_API_BASE_URL + "/api/auto-sort"
+    if (jd) {
+      formData.append("job_description", jd)
+      url = import.meta.env.VITE_API_BASE_URL + "/api/rank"
+    }
+
+    const res = await fetch(url, {
       method: "POST",
       body: formData
     })
     const data = await res.json()
-    setResults(data)
+    const sortedData = data.sort((a, b) => b.score - a.score)
+    const rankedData = sortedData.map((item, index) => ({...item, rank: item.rank || index + 1}))
+    setResults(rankedData)
 
     if (!user) {
       setGuestScreenings(prev => prev + 1)
@@ -125,7 +132,7 @@ export default function App() {
           rating: feedback.rating,
           message: feedback.message || "No message provided",
           college: feedback.college || "Not specified",
-          reply_to: "noreply@campusscreen.app"
+          reply_to: "noreply@screeniq.app"
         },
         "uvdjtRqnAXqPdXy5L"
       )
@@ -171,7 +178,7 @@ export default function App() {
           <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center">
             <span style={{color:"white", fontWeight:"bold", fontSize:"14px"}}>CS</span>
           </div>
-          <span className="text-white font-bold text-lg">CampusScreen</span>
+          <span className="text-white font-bold text-lg">ScreenIQ</span>
           <span className="ml-2 text-xs bg-blue-500 text-white px-2 py-0.5 rounded-full">Beta</span>
         </div>
         <div className="flex items-center gap-3">
@@ -323,13 +330,15 @@ export default function App() {
                 <div className="w-6 h-6 bg-blue-500 rounded-lg flex items-center justify-center">
                   <span style={{color:"white", fontWeight:"bold", fontSize:"10px"}}>CS</span>
                 </div>
-                <span className="text-white font-bold">CampusScreen</span>
+                <span className="text-white font-bold">ScreenIQ</span>
               </div>
               <div className="flex gap-8 text-slate-400 text-sm">
                 <span>Built for placement officers and HR teams</span>
+                .
               </div>
               <div className="flex gap-6 text-slate-400 text-sm">
-                <a href="tel:9422278517" className="hover:text-white transition-colors">9422278517</a>
+                <a href="mailto:samruddhi.kulkarni72@gmail.com" className="hover:text-white transition-colors">samruddhi.kulkarni72@gmail.com</a>
+                <a href="https://www.linkedin.com/in/samruddhi-kulkarni-31a653261" target="_blank" className="hover:text-white transition-colors">LinkedIn</a>
                 <a href="https://github.com/Kulkarnisamruddh" target="_blank" className="hover:text-white transition-colors">GitHub</a>
               </div>
             </div>
@@ -449,10 +458,25 @@ export default function App() {
             </button>
           )}
 
-          {results.length > 0 && (
+          {results.length > 0 && (() => {
+            const roles = ["All", ...new Set(results.map(r => r.detected_role))]
+            const filteredResults = roleFilter === "All" ? results : results.filter(r => r.detected_role === roleFilter)
+            
+            return (
             <div className="mt-10">
               <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold text-white">{results.length} Candidates Ranked</h2>
+                <div className="flex items-center gap-4">
+                  <h2 className="text-2xl font-bold text-white">{filteredResults.length} Candidates Ranked</h2>
+                  <select
+                    className="bg-slate-800 border border-slate-600 text-white rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-blue-500"
+                    value={roleFilter}
+                    onChange={(e) => setRoleFilter(e.target.value)}
+                  >
+                    {roles.map(role => (
+                      <option key={role} value={role}>{role}</option>
+                    ))}
+                  </select>
+                </div>
                 <button
                   onClick={downloadCSV}
                   className="bg-green-600 hover:bg-green-700 text-white px-5 py-2 rounded-xl text-sm font-medium transition-colors"
@@ -468,12 +492,13 @@ export default function App() {
                       <th className="text-left text-slate-400 text-sm font-medium px-6 py-4">Rank</th>
                       <th className="text-left text-slate-400 text-sm font-medium px-6 py-4">Candidate</th>
                       <th className="text-left text-slate-400 text-sm font-medium px-6 py-4">Score</th>
+                      <th className="text-left text-slate-400 text-sm font-medium px-6 py-4">Best Fit Role</th>
                       <th className="text-left text-slate-400 text-sm font-medium px-6 py-4">Summary</th>
                       <th className="text-left text-slate-400 text-sm font-medium px-6 py-4">Red Flags</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {results.map((r, i) => (
+                    {filteredResults.map((r, i) => (
                       <tr key={i} className="border-b border-slate-700 hover:bg-slate-700 transition-colors">
                         <td className="px-6 py-4">
                           <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${getRankBadge(r.rank)}`}>
@@ -487,6 +512,9 @@ export default function App() {
                           <span className={`px-3 py-1 rounded-full text-sm font-bold ${getScoreColor(r.score)}`}>
                             {r.score}/100
                           </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="text-blue-400 text-xs font-semibold">{r.detected_role}</span>
                         </td>
                         <td className="px-6 py-4">
                           <p className="text-slate-400 text-xs max-w-xs">{r.summary}</p>
@@ -503,7 +531,7 @@ export default function App() {
               </div>
 
               <h3 className="text-xl font-bold text-white mb-4">Detailed Breakdown</h3>
-              {results.map((r, i) => (
+              {filteredResults.map((r, i) => (
                 <div key={i} className="bg-slate-800 border border-slate-700 rounded-2xl p-6 mb-4">
                   <div className="flex justify-between items-center mb-4">
                     <div className="flex items-center gap-3">
@@ -543,7 +571,8 @@ export default function App() {
                 </div>
               ))}
             </div>
-          )}
+            );
+          })()}
         </div>
       )}
 
