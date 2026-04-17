@@ -4,7 +4,7 @@ AI-powered bulk resume screener built for
 college placement officers and HR teams.
 
 ## Live Demo
-https://campus-screen.vercel.app
+https://screen-iq.vercel.app/
 
 ## What it does
 - Upload 50+ resumes at once
