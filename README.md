@@ -10,13 +10,14 @@
 
 ## 🚀 What it does
 
-ScreenIQ is an intelligent tool designed to make hiring and placement faster. Instead of reading hundreds of resumes manually, ScreenIQ uses advanced AI to evaluate them instantly.
+ScreenIQ is an intelligent tool designed to make hiring and placement cells faster. Instead of reading hundreds of resumes manually, ScreenIQ uses advanced AI to evaluate them instantly.
 
 - **Bulk Upload**: Upload up to 20 PDF resumes at once.
 - **Smart Ranking**: Paste a job description to get candidates ranked by their fit.
 - **Auto-Sort**: Don't have a job description? Just upload resumes, and the AI will automatically categorize them into roles (e.g., Python Developer, UI/UX Designer).
 - **Deep Insights**: Every candidate receives a score out of 100, a summary, key strengths, weaknesses, and **red flags** (like suspicious employment gaps).
-- **Export**: Export your fully ranked results as a CSV for your team.
+- **Candidate Comparison Matrix**: Select multiple candidates to compare their CGPA, Branch, Experience, Strengths, Weaknesses, and Red Flags side-by-side. Includes an interactive **Skills Overlap Grid**.
+- **Excel-Formatted Export**: Export your fully ranked results as an Excel-compatible, character-escaped UTF-8 CSV without column-shifting bugs.
 
 ## 💻 Tech Stack
 
@@ -25,7 +26,7 @@ ScreenIQ is an intelligent tool designed to make hiring and placement faster. In
 - **AI Integration**: Groq API (LLaMA 3.3 70B Model)
 - **PDF Parsing**: pdfplumber
 - **Database**: Supabase
-- **Hosting**: Vercel (Frontend) & Railway (Backend)
+- **Hosting**: Vercel (Frontend) & Render (Backend)
 
 ## 🛠️ Local Setup
 
