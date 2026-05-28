@@ -8,6 +8,13 @@ load_dotenv()
 
 client = AsyncGroq(api_key=os.environ.get("GROQ_API_KEY"))
 
+def extract_json_array(text: str) -> str:
+    start = text.find('[')
+    end = text.rfind(']')
+    if start != -1 and end != -1:
+        return text[start:end+1]
+    return text
+
 async def rank_resumes(job_description: str, resumes: list) -> list:
     resume_text = ""
     for i, resume in enumerate(resumes):
@@ -67,7 +74,11 @@ Return only JSON, nothing else."""
 
     clean = chat_completion.choices[0].message.content
     clean = clean.replace("```json", "").replace("```", "").strip()
-    result = json.loads(clean)
+    try:
+        clean = extract_json_array(clean)
+        result = json.loads(clean)
+    except json.JSONDecodeError:
+        result = json.loads(clean)
     return result
 
 
@@ -125,5 +136,9 @@ Return only JSON, nothing else."""
 
     clean = chat_completion.choices[0].message.content
     clean = clean.replace("```json", "").replace("```", "").strip()
-    result = json.loads(clean)
+    try:
+        clean = extract_json_array(clean)
+        result = json.loads(clean)
+    except json.JSONDecodeError:
+        result = json.loads(clean)
     return result
