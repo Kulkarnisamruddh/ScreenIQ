@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react"
 import { supabase } from "./supabase"
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom"
+import { HashRouter, Routes, Route, Navigate } from "react-router-dom"
 import Navbar from "./components/Navbar"
 import Landing from "./pages/Landing"
 import Login from "./pages/Login"
@@ -30,7 +30,7 @@ export default function App() {
   )
 
   return (
-    <BrowserRouter>
+    <HashRouter>
       <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex flex-col">
         <Navbar user={user} />
         <div className="flex-1">
@@ -44,6 +44,6 @@ export default function App() {
           </Routes>
         </div>
       </div>
-    </BrowserRouter>
+    </HashRouter>
   )
 }
