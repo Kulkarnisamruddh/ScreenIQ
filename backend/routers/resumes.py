@@ -29,7 +29,8 @@ async def upload_resumes(files: List[UploadFile] = File(...)):
 @router.post("/rank")
 async def rank_uploaded_resumes(
     files: List[UploadFile] = File(...),
-    job_description: str = Form(...)
+    job_description: str = Form(...),
+    method: str = Form("llm")
 ):
     if len(files) > 20:
         raise HTTPException(
@@ -50,7 +51,12 @@ async def rank_uploaded_resumes(
     if not resumes:
         raise HTTPException(status_code=400, detail="No valid PDF files uploaded")
 
-    ranked = await rank_resumes(job_description, resumes)
+    if method == "tfidf":
+        from services.ranker import rank_resumes_tfidf
+        ranked = rank_resumes_tfidf(job_description, resumes)
+    else:
+        ranked = await rank_resumes(job_description, resumes)
+        
     return ranked
 
 @router.post("/auto-sort")

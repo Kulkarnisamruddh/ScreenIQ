@@ -15,6 +15,44 @@ def extract_json_array(text: str) -> str:
         return text[start:end+1]
     return text
 
+def rank_resumes_tfidf(job_description: str, resumes: list) -> list:
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.metrics.pairwise import cosine_similarity
+    
+    texts = [job_description] + [r['text'] for r in resumes]
+    vectorizer = TfidfVectorizer(stop_words='english')
+    tfidf_matrix = vectorizer.fit_transform(texts)
+    
+    # Cosine similarity of JD (index 0) with all resumes
+    cosine_similarities = cosine_similarity(tfidf_matrix[0:1], tfidf_matrix[1:]).flatten()
+    
+    results = []
+    for i, score in enumerate(cosine_similarities):
+        results.append({
+            "filename": resumes[i]['filename'],
+            "rank": 0, # Will sort and update
+            "score": int(score * 100),
+            "strengths": ["Matched relevant keywords based on TF-IDF scoring"],
+            "weaknesses": ["TF-IDF cannot analyze contextual weaknesses"],
+            "red_flags": [],
+            "summary": f"Ranked mathematically with Cosine Similarity score of {int(score*100)}/100.",
+            "detected_role": "Unknown",
+            "experience_level": "Unknown",
+            "cgpa": None,
+            "batch_year": None,
+            "branch": None,
+            "location": None,
+            "skills_detected": [],
+            "missing_skills": []
+        })
+        
+    # Sort by score descending
+    results.sort(key=lambda x: x['score'], reverse=True)
+    for idx, r in enumerate(results):
+        r['rank'] = idx + 1
+        
+    return results
+
 async def rank_resumes(job_description: str, resumes: list) -> list:
     resume_text = ""
     for i, resume in enumerate(resumes):
@@ -42,6 +80,7 @@ For each resume extract and provide:
 11. Branch (e.g. CS, IT, ENTC, Mechanical, null if not found)
 12. Location (city name if mentioned, null if not found)
 13. Top 5 skills detected (as list)
+14. Missing skills (skills mentioned in JD but missing in this resume, as list)
 
 Respond in this exact JSON format:
 [
@@ -59,7 +98,8 @@ Respond in this exact JSON format:
     "batch_year": 2026,
     "branch": "CS",
     "location": "Pune",
-    "skills_detected": ["Python", "Machine Learning", "Flask", "OpenCV", "SQL"]
+    "skills_detected": ["Python", "Machine Learning", "Flask", "OpenCV", "SQL"],
+    "missing_skills": ["Docker", "AWS"]
   }}
 ]
 

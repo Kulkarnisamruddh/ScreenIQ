@@ -24,3 +24,4 @@ class RankedResume(BaseModel):
     branch: Optional[str] = None
     location: Optional[str] = None
     skills_detected: Optional[List[str]] = []
+    missing_skills: Optional[List[str]] = []
