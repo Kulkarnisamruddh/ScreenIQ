@@ -121,8 +121,15 @@ export default function ScreeningTool({ user }) {
         url = baseUrl + "/api/rank"
       }
 
+      const { data: session } = await supabase.auth.getSession()
+      const headers = {}
+      if (session?.session?.access_token) {
+        headers["Authorization"] = `Bearer ${session.session.access_token}`
+      }
+
       const res = await fetch(url, {
         method: "POST",
+        headers: headers,
         body: formData
       })
       
@@ -138,40 +145,6 @@ export default function ScreeningTool({ user }) {
 
       if (!user) {
         setGuestScreenings(prev => prev + 1)
-      } else {
-        // Save to database
-        const { data: session, error: sessionError } = await supabase
-          .from("sessions")
-          .insert({
-            user_id: user.id,
-            job_title: jd.substring(0, 50),
-            job_description: jd,
-            total_resumes: data.length
-          })
-          .select()
-          .single()
-
-        if (!sessionError && session) {
-          const resumeRows = data.map(r => ({
-            session_id: session.id,
-            filename: r.filename,
-            rank: r.rank,
-            score: r.score,
-            summary: r.summary,
-            strengths: r.strengths,
-            weaknesses: r.weaknesses,
-            red_flags: r.red_flags,
-            detected_role: r.detected_role,
-            experience_level: r.experience_level,
-            cgpa: r.cgpa,
-            batch_year: r.batch_year,
-            branch: r.branch,
-            location: r.location,
-            skills_detected: r.skills_detected
-          }))
-
-          await supabase.from("resume_results").insert(resumeRows)
-        }
       }
     } catch (err) {
       setError("Something went wrong. Is the backend running? " + err.message)
@@ -362,13 +335,8 @@ export default function ScreeningTool({ user }) {
       )}
 
       {results.length > 0 && (() => {
-        const roles = [
-          "All", "Web Developer", "ML/AI Engineer", "Java Developer", "Python Developer", 
-          "Data Analyst", "DevOps Engineer", "Mobile Developer", "UI/UX Designer", 
-          "Product Manager", "QA Tester", "Cloud Architect", "Business Analyst", 
-          "HR/Recruiter", "Cyber Security", "Other"
-        ]
-        const filteredResults = roleFilter === "All" ? results : results.filter(r => r.detected_role === roleFilter)
+        const roles = ["All", ...new Set(results.map(r => r.detected_role || "Unknown"))];
+        const filteredResults = roleFilter === "All" ? results : results.filter(r => (r.detected_role || "Unknown") === roleFilter)
         
         return (
         <div className="mt-10">
