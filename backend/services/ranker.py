@@ -7,21 +7,42 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# We expect the router/main to check if this exists, but we can do a fallback
-api_key = os.environ.get("GROQ_API_KEY", "")
-client = AsyncGroq(api_key=api_key) if api_key else None
+def get_groq_client():
+    api_key = os.environ.get("GROQ_API_KEY", "")
+    return AsyncGroq(api_key=api_key) if api_key else None
 
-def extract_json_array(text: str) -> str:
-    start = text.find('[')
-    end = text.rfind(']')
-    if start != -1 and end != -1:
-        return text[start:end+1]
-    # Fallback for single object instead of array
-    start_obj = text.find('{')
-    end_obj = text.rfind('}')
-    if start_obj != -1 and end_obj != -1:
-        return "[" + text[start_obj:end_obj+1] + "]"
-    return text
+GROQ_MODELS = [
+    os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b"),
+    "qwen/qwen3.8-27b",
+    "openai/gpt-oss-20b"
+]
+
+def extract_json_data(text: str):
+    text = text.replace("```json", "").replace("```", "").strip()
+    # Try parsing directly
+    try:
+        return json.loads(text)
+    except Exception:
+        pass
+    # Find outer curly braces
+    s_obj = text.find('{')
+    e_obj = text.rfind('}')
+    if s_obj != -1 and e_obj != -1:
+        try:
+            return json.loads(text[s_obj:e_obj+1])
+        except Exception:
+            pass
+    # Find outer square brackets
+    s_arr = text.find('[')
+    e_arr = text.rfind(']')
+    if s_arr != -1 and e_arr != -1:
+        try:
+            arr = json.loads(text[s_arr:e_arr+1])
+            if isinstance(arr, list) and len(arr) > 0:
+                return arr[0]
+        except Exception:
+            pass
+    return None
 
 def custom_tokenizer(text: str):
     """
@@ -29,7 +50,6 @@ def custom_tokenizer(text: str):
     and standardizes common tech synonyms.
     """
     text = text.lower()
-    # Standardize common terms to avoid brittleness
     replacements = {
         r'\breact\.js\b': 'reactjs',
         r'\bnode\.js\b': 'nodejs',
@@ -42,7 +62,6 @@ def custom_tokenizer(text: str):
     for pattern, replacement in replacements.items():
         text = re.sub(pattern, replacement, text)
     
-    # Extract only alphabetic words (length >= 2)
     words = re.findall(r'\b[a-z]{2,}\b', text)
     return words
 
@@ -51,23 +70,23 @@ def rank_resumes_tfidf(job_description: str, resumes: list) -> list:
     from sklearn.metrics.pairwise import cosine_similarity
     
     texts = [job_description] + [r['text'] for r in resumes]
-    # Use custom tokenizer and english stop words
     vectorizer = TfidfVectorizer(stop_words='english', tokenizer=custom_tokenizer, token_pattern=None)
     tfidf_matrix = vectorizer.fit_transform(texts)
     
-    # Cosine similarity of JD (index 0) with all resumes
     cosine_similarities = cosine_similarity(tfidf_matrix[0:1], tfidf_matrix[1:]).flatten()
     
     results = []
-    for i, score in enumerate(cosine_similarities):
+    for i, raw_score in enumerate(cosine_similarities):
+        # Calibrate TF-IDF cosine similarity: in NLP keyword comparison, 0.35+ is top tier match
+        calibrated_score = min(100, max(0, int((raw_score / 0.35) * 100))) if raw_score > 0 else 0
         results.append({
             "filename": resumes[i]['filename'],
-            "rank": 0, # Will sort and update
-            "score": int(score * 100),
-            "strengths": ["Matched relevant keywords based on TF-IDF scoring"],
-            "weaknesses": ["TF-IDF cannot analyze contextual weaknesses"],
+            "rank": 0,
+            "score": calibrated_score,
+            "strengths": ["Matched relevant tech keywords based on TF-IDF vectorization"],
+            "weaknesses": ["TF-IDF cannot analyze contextual work experience"],
             "red_flags": [],
-            "summary": f"Ranked mathematically with Cosine Similarity score of {int(score*100)}/100.",
+            "summary": f"Ranked mathematically via TF-IDF ({calibrated_score}/100 fit, cosine similarity {raw_score:.2f}).",
             "detected_role": "Unknown",
             "experience_level": "Unknown",
             "cgpa": None,
@@ -78,7 +97,6 @@ def rank_resumes_tfidf(job_description: str, resumes: list) -> list:
             "missing_skills": []
         })
         
-    # Sort by score descending
     results.sort(key=lambda x: x['score'], reverse=True)
     for idx, r in enumerate(results):
         r['rank'] = idx + 1
@@ -87,7 +105,26 @@ def rank_resumes_tfidf(job_description: str, resumes: list) -> list:
 
 async def _rank_single_resume(job_description: str, resume: dict, sem: asyncio.Semaphore) -> dict:
     async with sem:
-        prompt = f"""You are a senior recruiter. Analyze this resume for the following job description.
+        client = get_groq_client()
+        if not client:
+            return {
+                "filename": resume['filename'],
+                "score": 0,
+                "strengths": [],
+                "weaknesses": [],
+                "red_flags": ["GROQ_API_KEY is not configured on the server."],
+                "summary": "GROQ_API_KEY missing.",
+                "detected_role": "Unknown",
+                "experience_level": "Unknown",
+                "cgpa": None,
+                "batch_year": None,
+                "branch": None,
+                "location": None,
+                "skills_detected": [],
+                "missing_skills": []
+            }
+
+        prompt = f"""You are a senior technical recruiter. Analyze this resume against the job description.
 
 Job Description:
 {job_description}
@@ -95,70 +132,53 @@ Job Description:
 Resume - {resume['filename']}:
 {resume['text']}
 
-Extract and provide:
-1. Score out of 100
-2. Top 3 strengths
-3. Top 3 weaknesses
-4. Red flags (if any)
-5. One line summary
-6. Detected role (exactly one of: Web Developer, ML/AI Engineer, Java Developer, Python Developer, Data Analyst, DevOps Engineer, Mobile Developer, UI/UX Designer, Product Manager, QA Tester, Cloud Architect, Business Analyst, HR/Recruiter, Cyber Security, Other)
-7. Experience level (exactly one of: Fresher, 1-2 years, 3-5 years, 5+ years)
-8. CGPA (extract exact number from resume, null if not found)
-9. Batch year (graduation year as number, null if not found)
-10. Branch (e.g. CS, IT, ENTC, Mechanical, null if not found)
-11. Location (city name if mentioned, null if not found)
-12. Top 5 skills detected (as list)
-13. Missing skills (skills mentioned in JD but missing in this resume, as list)
+Return a single JSON object with these exact keys:
+{{
+  "filename": "{resume['filename']}",
+  "score": 85,
+  "strengths": ["top strength 1", "top strength 2", "top strength 3"],
+  "weaknesses": ["weakness 1", "weakness 2", "weakness 3"],
+  "red_flags": [],
+  "summary": "concise 1-sentence summary",
+  "detected_role": "Python Developer",
+  "experience_level": "Fresher",
+  "cgpa": 7.5,
+  "batch_year": 2026,
+  "branch": "CS",
+  "location": "City or null",
+  "skills_detected": ["Python", "FastAPI"],
+  "missing_skills": ["AWS"]
+}}
 
-Respond in this exact JSON format:
-[
-  {{
-    "filename": "{resume['filename']}",
-    "score": 85,
-    "strengths": ["strength 1", "strength 2", "strength 3"],
-    "weaknesses": ["weakness 1", "weakness 2", "weakness 3"],
-    "red_flags": ["red flag if any"],
-    "summary": "one line summary",
-    "detected_role": "Python Developer",
-    "experience_level": "Fresher",
-    "cgpa": 7.46,
-    "batch_year": 2026,
-    "branch": "CS",
-    "location": "Pune",
-    "skills_detected": ["Python", "Machine Learning", "Flask", "OpenCV", "SQL"],
-    "missing_skills": ["Docker", "AWS"]
-  }}
-]
+Role must be one of: Web Developer, ML/AI Engineer, Java Developer, Python Developer, Data Analyst, DevOps Engineer, Mobile Developer, UI/UX Designer, Product Manager, QA Tester, Cloud Architect, Business Analyst, HR/Recruiter, Cyber Security, Other.
+Experience level must be one of: Fresher, 1-2 years, 3-5 years, 5+ years.
+Return valid JSON only."""
 
-Return only JSON, nothing else."""
-
-        try:
-            chat_completion = await client.chat.completions.create(
-                messages=[{"role": "user", "content": prompt}],
-                model="llama-3.3-70b-versatile",
-            )
-            clean = chat_completion.choices[0].message.content
-            clean = clean.replace("```json", "").replace("```", "").strip()
+        last_error = ""
+        for model_name in GROQ_MODELS:
+            try:
+                chat_completion = await client.chat.completions.create(
+                    messages=[{"role": "user", "content": prompt}],
+                    model=model_name,
+                    response_format={"type": "json_object"}
+                )
+                raw_content = chat_completion.choices[0].message.content
+                data = extract_json_data(raw_content)
+                if data and isinstance(data, dict):
+                    data["filename"] = resume['filename']
+                    data["score"] = int(data.get("score", 0))
+                    return data
+            except Exception as e:
+                last_error = str(e)
+                print(f"Error with model {model_name} on {resume['filename']}: {last_error}")
+                continue
             
-            clean = extract_json_array(clean)
-            result = json.loads(clean)
-            if isinstance(result, list) and len(result) > 0:
-                # Force filename to match in case LLM hallucinated it
-                result[0]["filename"] = resume['filename']
-                return result[0]
-            elif isinstance(result, dict):
-                result["filename"] = resume['filename']
-                return result
-        except Exception as e:
-            print(f"Error parsing resume {resume['filename']}: {str(e)}")
-            
-        # Fallback if parsing fails entirely for this chunk
         return {
             "filename": resume['filename'],
             "score": 0,
             "strengths": [],
             "weaknesses": [],
-            "red_flags": ["LLM processing failed for this resume."],
+            "red_flags": [f"LLM processing failed: {last_error[:80]}" if last_error else "LLM parsing failed."],
             "summary": "Failed to parse resume.",
             "detected_role": "Unknown",
             "experience_level": "Unknown",
@@ -171,15 +191,14 @@ Return only JSON, nothing else."""
         }
 
 async def rank_resumes(job_description: str, resumes: list) -> list:
+    client = get_groq_client()
     if not client:
         raise Exception("GROQ_API_KEY is missing or invalid.")
     
-    # Use a semaphore to prevent hitting Groq rate limits
     sem = asyncio.Semaphore(4)
     tasks = [_rank_single_resume(job_description, r, sem) for r in resumes]
     results = await asyncio.gather(*tasks)
     
-    # Sort results by score and assign ranks
     results.sort(key=lambda x: x.get('score', 0), reverse=True)
     for idx, r in enumerate(results):
         r['rank'] = idx + 1
@@ -188,71 +207,75 @@ async def rank_resumes(job_description: str, resumes: list) -> list:
 
 async def _auto_sort_single_resume(resume: dict, sem: asyncio.Semaphore) -> dict:
     async with sem:
-        prompt = f"""You are a senior recruiter. Analyze this resume and categorize it by role.
+        client = get_groq_client()
+        if not client:
+            return {
+                "filename": resume['filename'],
+                "score": 0,
+                "strengths": [],
+                "weaknesses": [],
+                "red_flags": ["GROQ_API_KEY is not configured on the server."],
+                "summary": "GROQ_API_KEY missing.",
+                "detected_role": "Unknown",
+                "experience_level": "Unknown",
+                "cgpa": None,
+                "batch_year": None,
+                "branch": None,
+                "location": None,
+                "skills_detected": []
+            }
+
+        prompt = f"""You are a senior technical recruiter. Categorize and evaluate this resume.
 
 Resume - {resume['filename']}:
 {resume['text']}
 
-Extract and provide:
-1. Score out of 100
-2. Top 3 strengths
-3. Top 3 weaknesses
-4. Red flags (if any)
-5. One line summary
-6. Detected role (exactly one of: Web Developer, ML/AI Engineer, Java Developer, Python Developer, Data Analyst, DevOps Engineer, Mobile Developer, UI/UX Designer, Product Manager, QA Tester, Cloud Architect, Business Analyst, HR/Recruiter, Cyber Security, Other)
-7. Experience level (exactly one of: Fresher, 1-2 years, 3-5 years, 5+ years)
-8. CGPA (extract exact number, null if not found)
-9. Batch year (graduation year, null if not found)
-10. Branch (CS/IT/ENTC/Mechanical etc, null if not found)
-11. Location (city if mentioned, null if not found)
-12. Top 5 skills detected
+Return a single JSON object with these exact keys:
+{{
+  "filename": "{resume['filename']}",
+  "score": 85,
+  "strengths": ["top strength 1", "top strength 2", "top strength 3"],
+  "weaknesses": ["weakness 1", "weakness 2", "weakness 3"],
+  "red_flags": [],
+  "summary": "concise 1-sentence summary",
+  "detected_role": "Python Developer",
+  "experience_level": "Fresher",
+  "cgpa": 7.5,
+  "batch_year": 2026,
+  "branch": "CS",
+  "location": "City or null",
+  "skills_detected": ["Python", "FastAPI"]
+}}
 
-Respond in this exact JSON format:
-[
-  {{
-    "filename": "{resume['filename']}",
-    "score": 85,
-    "strengths": ["strength 1", "strength 2", "strength 3"],
-    "weaknesses": ["weakness 1", "weakness 2", "weakness 3"],
-    "red_flags": ["red flag if any"],
-    "summary": "one line summary",
-    "detected_role": "Python Developer",
-    "experience_level": "Fresher",
-    "cgpa": 7.46,
-    "batch_year": 2026,
-    "branch": "CS",
-    "location": "Pune",
-    "skills_detected": ["Python", "Machine Learning", "Flask", "OpenCV", "SQL"]
-  }}
-]
+Role must be one of: Web Developer, ML/AI Engineer, Java Developer, Python Developer, Data Analyst, DevOps Engineer, Mobile Developer, UI/UX Designer, Product Manager, QA Tester, Cloud Architect, Business Analyst, HR/Recruiter, Cyber Security, Other.
+Experience level must be one of: Fresher, 1-2 years, 3-5 years, 5+ years.
+Return valid JSON only."""
 
-Return only JSON, nothing else."""
-
-        try:
-            chat_completion = await client.chat.completions.create(
-                messages=[{"role": "user", "content": prompt}],
-                model="llama-3.3-70b-versatile",
-            )
-            clean = chat_completion.choices[0].message.content
-            clean = clean.replace("```json", "").replace("```", "").strip()
-            
-            clean = extract_json_array(clean)
-            result = json.loads(clean)
-            if isinstance(result, list) and len(result) > 0:
-                result[0]["filename"] = resume['filename']
-                return result[0]
-            elif isinstance(result, dict):
-                result["filename"] = resume['filename']
-                return result
-        except Exception as e:
-            print(f"Error parsing resume {resume['filename']}: {str(e)}")
+        last_error = ""
+        for model_name in GROQ_MODELS:
+            try:
+                chat_completion = await client.chat.completions.create(
+                    messages=[{"role": "user", "content": prompt}],
+                    model=model_name,
+                    response_format={"type": "json_object"}
+                )
+                raw_content = chat_completion.choices[0].message.content
+                data = extract_json_data(raw_content)
+                if data and isinstance(data, dict):
+                    data["filename"] = resume['filename']
+                    data["score"] = int(data.get("score", 0))
+                    return data
+            except Exception as e:
+                last_error = str(e)
+                print(f"Error with model {model_name} on {resume['filename']}: {last_error}")
+                continue
             
         return {
             "filename": resume['filename'],
             "score": 0,
             "strengths": [],
             "weaknesses": [],
-            "red_flags": ["LLM processing failed for this resume."],
+            "red_flags": [f"LLM processing failed: {last_error[:80]}" if last_error else "LLM parsing failed."],
             "summary": "Failed to parse resume.",
             "detected_role": "Unknown",
             "experience_level": "Unknown",
@@ -264,6 +287,7 @@ Return only JSON, nothing else."""
         }
 
 async def auto_sort_resumes(resumes: list) -> list:
+    client = get_groq_client()
     if not client:
         raise Exception("GROQ_API_KEY is missing or invalid.")
         
